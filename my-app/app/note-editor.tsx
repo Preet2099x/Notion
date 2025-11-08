@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Switch,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Note, Tag } from '@/types/note.types';
@@ -31,10 +32,20 @@ export default function NoteEditor() {
   const [showTagInput, setShowTagInput] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isLocked, setIsLocked] = useState(false);
+  const [existingNoteId, setExistingNoteId] = useState<string | null>(null);
+  const [wasLockedOnOpen, setWasLockedOnOpen] = useState(false);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
 
   useEffect(() => {
     loadNote();
     loadAllTags();
+    
+    // Check if note was locked when opened
+    if (params.wasLocked === 'true') {
+      setWasLockedOnOpen(true);
+      setTempPassword(params.tempPassword as string || null);
+    }
   }, []);
 
   const loadNote = async () => {
@@ -46,6 +57,8 @@ export default function NoteEditor() {
           setTitle(note.title);
           setContent(note.content);
           setTags(note.tags);
+          setIsLocked(note.isLocked);
+          setExistingNoteId(note.id);
         }
       } catch (error) {
         console.error('Failed to load note:', error);
@@ -70,6 +83,12 @@ export default function NoteEditor() {
       return;
     }
 
+    // If lock is enabled but no password is set, prompt for it
+    if (isLocked && !tempPassword) {
+      Alert.alert('Error', 'Please set a password by toggling password protection');
+      return;
+    }
+
     try {
       const note: Note = {
         id: (params.id as string) || `note_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -78,15 +97,71 @@ export default function NoteEditor() {
         tags,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        isLocked: false,
+        isLocked: isLocked,
         isArchived: false,
       };
 
       await StorageService.saveNote(note);
-      router.back();
+      
+      // Handle password protection scenarios
+      if (isLocked && tempPassword) {
+        // Password was set via toggle or passed from unlock
+        try {
+          await StorageService.lockNote(note.id, tempPassword);
+          router.back();
+        } catch (error) {
+          console.error('Failed to lock note:', error);
+          Alert.alert('Error', 'Failed to set password');
+          router.back();
+        }
+      } else if (!isLocked && wasLockedOnOpen) {
+        // User removed password protection - note should stay unlocked
+        router.back();
+      } else {
+        router.back();
+      }
     } catch (error) {
       console.error('Failed to save note:', error);
       Alert.alert('Error', 'Failed to save note');
+    }
+  };
+
+  const handleToggleLock = (value: boolean) => {
+    if (!value && isLocked && existingNoteId) {
+      // Removing password protection
+      Alert.alert(
+        'Remove Password',
+        'This will remove the password protection from this note.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove',
+            style: 'destructive',
+            onPress: () => {
+              setIsLocked(false);
+              setTempPassword(null);
+            },
+          },
+        ]
+      );
+    } else if (value) {
+      // Enabling password protection - prompt immediately
+      Alert.prompt(
+        'Set Password',
+        'Enter a password to protect this note. You will need this password to open the note.',
+        (password) => {
+          if (password && password.trim()) {
+            setIsLocked(true);
+            setTempPassword(password);
+            Alert.alert('Success', 'Password protection enabled. Remember to save your note.');
+          } else {
+            Alert.alert('Error', 'Password cannot be empty');
+          }
+        },
+        'secure-text'
+      );
+    } else {
+      setIsLocked(value);
     }
   };
 
@@ -170,6 +245,35 @@ export default function NoteEditor() {
           onChangeText={setTitle}
           autoFocus={!params.id}
         />
+
+        {/* Encryption Toggle Section */}
+        <View style={[styles.encryptionSection, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+          <View style={styles.encryptionInfo}>
+            <View style={styles.encryptionIconContainer}>
+              <IconSymbol 
+                name={isLocked ? 'lock.fill' : 'lock.open'} 
+                size={20} 
+                color={isLocked ? '#34C759' : colors.icon} 
+              />
+            </View>
+            <View style={styles.encryptionText}>
+              <Text style={[styles.encryptionTitle, { color: colors.text }]}>
+                Password Protection
+              </Text>
+              <Text style={[styles.encryptionDescription, { color: colors.textSecondary }]}>
+                {isLocked 
+                  ? 'This note requires a password to open'
+                  : 'All notes are encrypted. Add password for extra security'}
+              </Text>
+            </View>
+          </View>
+          <Switch
+            value={isLocked}
+            onValueChange={handleToggleLock}
+            trackColor={{ false: colors.border, true: '#34C759' }}
+            thumbColor="#FFFFFF"
+          />
+        </View>
 
         <View style={styles.tagsSection}>
           <View style={styles.tagsHeader}>
@@ -270,6 +374,42 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     marginBottom: 16,
+  },
+  encryptionSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  encryptionInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
+  },
+  encryptionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F2F2F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  encryptionText: {
+    flex: 1,
+  },
+  encryptionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  encryptionDescription: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   tagsSection: {
     marginBottom: 16,

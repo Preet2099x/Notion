@@ -13,6 +13,7 @@ import { Note } from '@/types/note.types';
 import { StorageService } from '@/services/storage.service';
 import { NoteCard } from '@/components/notes/note-card';
 import { SearchBar } from '@/components/notes/search-bar';
+import { LockModal } from '@/components/notes/lock-modal';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
@@ -29,6 +30,8 @@ export default function ArchiveScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
+  const [lockModalVisible, setLockModalVisible] = useState(false);
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -76,10 +79,39 @@ export default function ArchiveScreen() {
       return;
     }
     
-    router.push({
-      pathname: '/note-editor',
-      params: { id: note.id },
-    });
+    if (note.isLocked) {
+      setSelectedNoteId(note.id);
+      setLockModalVisible(true);
+    } else {
+      router.push({
+        pathname: '/note-editor',
+        params: { id: note.id },
+      });
+    }
+  };
+
+  const handleUnlockConfirm = async (password: string) => {
+    if (!selectedNoteId) return;
+
+    try {
+      const unlocked = await StorageService.unlockNote(selectedNoteId, password);
+      if (unlocked) {
+        setLockModalVisible(false);
+        router.push({
+          pathname: '/note-editor',
+          params: { 
+            id: selectedNoteId,
+            wasLocked: 'true',
+            tempPassword: password,
+          },
+        });
+      } else {
+        Alert.alert('Error', 'Incorrect password');
+      }
+    } catch (error) {
+      console.error('Unlock failed:', error);
+      Alert.alert('Error', 'Failed to unlock note');
+    }
   };
 
   const toggleNoteSelection = (noteId: string) => {
@@ -330,6 +362,13 @@ export default function ArchiveScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={loadNotes} />
         }
+      />
+
+      <LockModal
+        visible={lockModalVisible}
+        mode="unlock"
+        onConfirm={handleUnlockConfirm}
+        onCancel={() => setLockModalVisible(false)}
       />
     </View>
   );

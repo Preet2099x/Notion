@@ -249,7 +249,11 @@ export default function HomeScreen() {
           setLockModalVisible(false);
           router.push({
             pathname: '/note-editor',
-            params: { id: selectedNoteId },
+            params: { 
+              id: selectedNoteId,
+              wasLocked: 'true',
+              tempPassword: password,
+            },
           });
           return;
         } else {
