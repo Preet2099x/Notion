@@ -344,7 +344,7 @@ export default function HomeScreen() {
           </>
         ) : (
           <>
-            <Text style={[styles.title, { color: colors.text }]}>My Notes</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Notion</Text>
             <View style={styles.headerActions}>
               <TouchableOpacity onPress={toggleSelectionMode} style={styles.headerIconButton}>
                 <IconSymbol name="checkmark.circle" size={24} color={colors.tint} />
