@@ -36,6 +36,10 @@ export default function HomeScreen() {
   const [exportModalVisible, setExportModalVisible] = useState(false);
   const [exportNoteId, setExportNoteId] = useState<string | null>(null);
 
+  // Selection mode state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
+
   useEffect(() => {
     loadNotes();
   }, []);
@@ -81,6 +85,11 @@ export default function HomeScreen() {
   };
 
   const handleNotePress = async (note: Note) => {
+    if (selectionMode) {
+      toggleNoteSelection(note.id);
+      return;
+    }
+    
     if (note.isLocked) {
       setSelectedNoteId(note.id);
       setLockModalMode('unlock');
@@ -90,6 +99,83 @@ export default function HomeScreen() {
         pathname: '/note-editor',
         params: { id: note.id },
       });
+    }
+  };
+
+  const toggleNoteSelection = (noteId: string) => {
+    setSelectedNotes((prev) => {
+      if (prev.includes(noteId)) {
+        return prev.filter((id) => id !== noteId);
+      } else {
+        return [...prev, noteId];
+      }
+    });
+  };
+
+  const toggleSelectionMode = () => {
+    setSelectionMode(!selectionMode);
+    setSelectedNotes([]);
+  };
+
+  const handleBulkArchive = async () => {
+    if (selectedNotes.length === 0) {
+      Alert.alert('No Selection', 'Please select notes to archive');
+      return;
+    }
+
+    try {
+      for (const noteId of selectedNotes) {
+        await StorageService.toggleArchive(noteId);
+      }
+      await loadNotes();
+      setSelectionMode(false);
+      setSelectedNotes([]);
+      Alert.alert('Success', `${selectedNotes.length} note(s) archived`);
+    } catch (error) {
+      console.error('Bulk archive failed:', error);
+      Alert.alert('Error', 'Failed to archive notes');
+    }
+  };
+
+  const handleBulkExport = async () => {
+    if (selectedNotes.length === 0) {
+      Alert.alert('No Selection', 'Please select notes to export');
+      return;
+    }
+
+    try {
+      let successCount = 0;
+      let failedCount = 0;
+
+      for (const noteId of selectedNotes) {
+        const note = notes.find((n) => n.id === noteId);
+        if (note) {
+          try {
+            await StorageService.exportNoteAsText(note);
+            successCount++;
+          } catch (error) {
+            console.error(`Failed to export note ${noteId}:`, error);
+            failedCount++;
+          }
+        } else {
+          failedCount++;
+        }
+      }
+
+      setSelectionMode(false);
+      setSelectedNotes([]);
+
+      if (failedCount === 0) {
+        Alert.alert('Success', `${successCount} note(s) exported as text files`);
+      } else {
+        Alert.alert(
+          'Partially Complete',
+          `${successCount} note(s) exported, ${failedCount} failed`
+        );
+      }
+    } catch (error) {
+      console.error('Bulk export failed:', error);
+      Alert.alert('Error', 'Failed to export notes');
     }
   };
 
@@ -217,12 +303,66 @@ export default function HomeScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.text }]}>My Notes</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity onPress={handleImport} style={styles.headerButton}>
-            <IconSymbol name="square.and.arrow.down" size={24} color={colors.icon} />
-          </TouchableOpacity>
-        </View>
+        {selectionMode ? (
+          <>
+            <View style={styles.selectionHeader}>
+              <TouchableOpacity onPress={toggleSelectionMode} style={styles.cancelButton}>
+                <Text style={[styles.cancelButtonText, { color: colors.tint }]}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={[styles.selectionCount, { color: colors.text }]}>
+                {selectedNotes.length} selected
+              </Text>
+            </View>
+            <View style={styles.headerActions}>
+              <TouchableOpacity 
+                onPress={handleBulkArchive} 
+                style={styles.headerIconButton}
+                disabled={selectedNotes.length === 0}>
+                <IconSymbol 
+                  name="archivebox" 
+                  size={24} 
+                  color={selectedNotes.length > 0 ? colors.tint : colors.icon} 
+                />
+                <Text style={[styles.headerButtonText, { 
+                  color: selectedNotes.length > 0 ? colors.tint : colors.icon 
+                }]}>Archive</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={handleBulkExport} 
+                style={styles.headerIconButton}
+                disabled={selectedNotes.length === 0}>
+                <IconSymbol 
+                  name="square.and.arrow.up" 
+                  size={24} 
+                  color={selectedNotes.length > 0 ? colors.tint : colors.icon} 
+                />
+                <Text style={[styles.headerButtonText, { 
+                  color: selectedNotes.length > 0 ? colors.tint : colors.icon 
+                }]}>Export</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={[styles.title, { color: colors.text }]}>My Notes</Text>
+            <View style={styles.headerActions}>
+              <TouchableOpacity onPress={toggleSelectionMode} style={styles.headerIconButton}>
+                <IconSymbol name="checkmark.circle" size={24} color={colors.tint} />
+                <Text style={[styles.headerButtonText, { color: colors.tint }]}>Select</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={() => router.push('/(tabs)/explore')} 
+                style={styles.headerIconButton}>
+                <IconSymbol name="archivebox" size={24} color={colors.tint} />
+                <Text style={[styles.headerButtonText, { color: colors.tint }]}>Archive</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleImport} style={styles.headerIconButton}>
+                <IconSymbol name="square.and.arrow.down" size={24} color={colors.tint} />
+                <Text style={[styles.headerButtonText, { color: colors.tint }]}>Import</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </View>
 
       <SearchBar value={searchQuery} onChangeText={setSearchQuery} />
@@ -238,6 +378,9 @@ export default function HomeScreen() {
             onArchive={() => handleArchive(item.id)}
             onExport={() => handleExport(item.id)}
             onDelete={() => handleDelete(item.id)}
+            selectionMode={selectionMode}
+            isSelected={selectedNotes.includes(item.id)}
+            onToggleSelection={() => toggleNoteSelection(item.id)}
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -310,6 +453,33 @@ const styles = StyleSheet.create({
   },
   headerButton: {
     padding: 4,
+  },
+  headerIconButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
+    minWidth: 60,
+  },
+  headerButtonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  selectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  cancelButton: {
+    padding: 4,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  selectionCount: {
+    fontSize: 18,
+    fontWeight: '600',
   },
   listContent: {
     paddingVertical: 8,
