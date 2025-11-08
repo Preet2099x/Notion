@@ -222,11 +222,6 @@ export default function HomeScreen() {
           <TouchableOpacity onPress={handleImport} style={styles.headerButton}>
             <IconSymbol name="square.and.arrow.down" size={24} color={colors.icon} />
           </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => router.push('/note-editor')}
-            style={[styles.headerButton, styles.addButton]}>
-            <IconSymbol name="plus" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
         </View>
       </View>
 
@@ -276,6 +271,13 @@ export default function HomeScreen() {
         onConfirm={handleExportConfirm}
         onCancel={() => setExportModalVisible(false)}
       />
+
+      {/* Floating Action Button */}
+      <TouchableOpacity
+        onPress={() => router.push('/note-editor')}
+        style={styles.fab}>
+        <Text style={styles.fabText}>+</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -309,16 +311,32 @@ const styles = StyleSheet.create({
   headerButton: {
     padding: 4,
   },
-  addButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   listContent: {
     paddingVertical: 8,
+    paddingBottom: 80,
+  },
+  fab: {
+    position: 'absolute',
+    left: 20,
+    bottom: 80,
+    backgroundColor: '#007AFF',
+    borderRadius: 32,
+    width: 64,
+    height: 64,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  fabText: {
+    fontSize: 48,
+    fontWeight: '300',
+    color: '#FFFFFF',
+    lineHeight: 48,
+    marginTop: -2,
   },
   emptyContainer: {
     flex: 1,
