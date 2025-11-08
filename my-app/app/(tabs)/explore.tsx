@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Alert,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Note } from '@/types/note.types';
@@ -26,6 +27,8 @@ export default function ArchiveScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -68,19 +71,139 @@ export default function ArchiveScreen() {
   };
 
   const handleNotePress = (note: Note) => {
+    if (selectionMode) {
+      toggleNoteSelection(note.id);
+      return;
+    }
+    
     router.push({
       pathname: '/note-editor',
       params: { id: note.id },
     });
   };
 
+  const toggleNoteSelection = (noteId: string) => {
+    setSelectedNotes((prev) => {
+      if (prev.includes(noteId)) {
+        return prev.filter((id) => id !== noteId);
+      } else {
+        return [...prev, noteId];
+      }
+    });
+  };
+
+  const toggleSelectionMode = () => {
+    setSelectionMode(!selectionMode);
+    setSelectedNotes([]);
+  };
+
+  const handleBulkUnarchive = async () => {
+    if (selectedNotes.length === 0) {
+      Alert.alert('No Selection', 'Please select notes to unarchive');
+      return;
+    }
+
+    try {
+      let successCount = 0;
+      let failedCount = 0;
+      const totalCount = selectedNotes.length;
+
+      for (const noteId of selectedNotes) {
+        try {
+          const allNotes = await StorageService.getAllNotes();
+          const note = allNotes.find((n) => n.id === noteId);
+          
+          if (!note) {
+            console.error(`Note ${noteId} not found`);
+            failedCount++;
+            continue;
+          }
+
+          await StorageService.toggleArchive(noteId);
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to unarchive note ${noteId}:`, error);
+          failedCount++;
+        }
+      }
+
+      setSelectionMode(false);
+      setSelectedNotes([]);
+      await loadNotes();
+
+      if (failedCount === 0) {
+        Alert.alert('Success', `${successCount} note(s) moved to My Notes`);
+      } else {
+        Alert.alert(
+          'Partially Complete',
+          `${successCount} of ${totalCount} note(s) unarchived, ${failedCount} failed`
+        );
+      }
+    } catch (error) {
+      console.error('Bulk unarchive failed:', error);
+      Alert.alert('Error', 'Failed to unarchive notes. Please try again.');
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedNotes.length === 0) {
+      Alert.alert('No Selection', 'Please select notes to delete');
+      return;
+    }
+
+    Alert.alert(
+      'Delete Notes',
+      `Are you sure you want to permanently delete ${selectedNotes.length} note(s)? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              let successCount = 0;
+              let failedCount = 0;
+
+              for (const noteId of selectedNotes) {
+                try {
+                  await StorageService.deleteNote(noteId);
+                  successCount++;
+                } catch (error) {
+                  console.error(`Failed to delete note ${noteId}:`, error);
+                  failedCount++;
+                }
+              }
+
+              await loadNotes();
+              setSelectionMode(false);
+              setSelectedNotes([]);
+
+              if (failedCount === 0) {
+                Alert.alert('Success', `${successCount} note(s) deleted`);
+              } else {
+                Alert.alert(
+                  'Partially Complete',
+                  `${successCount} note(s) deleted, ${failedCount} failed`
+                );
+              }
+            } catch (error) {
+              console.error('Bulk delete failed:', error);
+              Alert.alert('Error', 'Failed to delete notes');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleUnarchive = async (noteId: string) => {
     try {
       await StorageService.toggleArchive(noteId);
       await loadNotes();
+      Alert.alert('Success', 'Note moved to My Notes');
     } catch (error) {
       console.error('Unarchive failed:', error);
-      Alert.alert('Error', 'Failed to unarchive note');
+      Alert.alert('Error', 'Failed to unarchive note. Please try again.');
     }
   };
 
@@ -120,7 +243,54 @@ export default function ArchiveScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.text }]}>Archive</Text>
+        {selectionMode ? (
+          <>
+            <View style={styles.selectionHeader}>
+              <TouchableOpacity onPress={toggleSelectionMode} style={styles.cancelButton}>
+                <Text style={[styles.cancelButtonText, { color: colors.tint }]}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={[styles.selectionCount, { color: colors.text }]}>
+                {selectedNotes.length} selected
+              </Text>
+            </View>
+            <View style={styles.headerActions}>
+              <TouchableOpacity 
+                onPress={handleBulkUnarchive} 
+                style={styles.headerIconButton}
+                disabled={selectedNotes.length === 0}>
+                <IconSymbol 
+                  name="tray.and.arrow.up" 
+                  size={24} 
+                  color={selectedNotes.length > 0 ? colors.tint : colors.icon} 
+                />
+                <Text style={[styles.headerButtonText, { 
+                  color: selectedNotes.length > 0 ? colors.tint : colors.icon 
+                }]}>Unarchive</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={handleBulkDelete} 
+                style={styles.headerIconButton}
+                disabled={selectedNotes.length === 0}>
+                <IconSymbol 
+                  name="trash" 
+                  size={24} 
+                  color={selectedNotes.length > 0 ? '#FF3B30' : colors.icon} 
+                />
+                <Text style={[styles.headerButtonText, { 
+                  color: selectedNotes.length > 0 ? '#FF3B30' : colors.icon 
+                }]}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={[styles.title, { color: colors.text }]}>Archive</Text>
+            <TouchableOpacity onPress={toggleSelectionMode} style={styles.selectButton}>
+              <IconSymbol name="checkmark.circle" size={24} color={colors.tint} />
+              <Text style={[styles.selectButtonText, { color: colors.tint }]}>Select</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       <SearchBar
@@ -138,6 +308,9 @@ export default function ArchiveScreen() {
             onPress={() => handleNotePress(item)}
             onArchive={() => handleUnarchive(item.id)}
             onDelete={() => handleDelete(item.id)}
+            selectionMode={selectionMode}
+            isSelected={selectedNotes.includes(item.id)}
+            onToggleSelection={() => toggleNoteSelection(item.id)}
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -172,6 +345,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 12,
@@ -180,6 +356,47 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '700',
+  },
+  selectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    padding: 4,
+  },
+  selectButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  selectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  cancelButton: {
+    padding: 4,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  selectionCount: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  headerIconButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 4,
+    minWidth: 60,
+  },
+  headerButtonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
   },
   listContent: {
     paddingVertical: 8,
