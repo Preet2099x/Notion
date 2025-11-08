@@ -179,6 +179,57 @@ export default function HomeScreen() {
     }
   };
 
+  const handleBulkDelete = () => {
+    if (selectedNotes.length === 0) {
+      Alert.alert('No Selection', 'Please select notes to delete');
+      return;
+    }
+
+    Alert.alert(
+      'Delete Notes',
+      `Are you sure you want to delete ${selectedNotes.length} note(s)? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              let successCount = 0;
+              let failedCount = 0;
+
+              for (const noteId of selectedNotes) {
+                try {
+                  await StorageService.deleteNote(noteId);
+                  successCount++;
+                } catch (error) {
+                  console.error(`Failed to delete note ${noteId}:`, error);
+                  failedCount++;
+                }
+              }
+
+              await loadNotes();
+              setSelectionMode(false);
+              setSelectedNotes([]);
+
+              if (failedCount === 0) {
+                Alert.alert('Success', `${successCount} note(s) deleted`);
+              } else {
+                Alert.alert(
+                  'Partially Complete',
+                  `${successCount} note(s) deleted, ${failedCount} failed`
+                );
+              }
+            } catch (error) {
+              console.error('Bulk delete failed:', error);
+              Alert.alert('Error', 'Failed to delete notes');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleLock = (noteId: string, isLocked: boolean) => {
     setSelectedNoteId(noteId);
     setLockModalMode(isLocked ? 'unlock' : 'lock');
@@ -339,6 +390,19 @@ export default function HomeScreen() {
                 <Text style={[styles.headerButtonText, { 
                   color: selectedNotes.length > 0 ? colors.tint : colors.icon 
                 }]}>Export</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                onPress={handleBulkDelete} 
+                style={styles.headerIconButton}
+                disabled={selectedNotes.length === 0}>
+                <IconSymbol 
+                  name="trash" 
+                  size={24} 
+                  color={selectedNotes.length > 0 ? '#FF3B30' : colors.icon} 
+                />
+                <Text style={[styles.headerButtonText, { 
+                  color: selectedNotes.length > 0 ? '#FF3B30' : colors.icon 
+                }]}>Delete</Text>
               </TouchableOpacity>
             </View>
           </>
