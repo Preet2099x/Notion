@@ -20,6 +20,9 @@ interface NoteCardProps {
   onArchive?: () => void;
   onExport?: () => void;
   onDelete?: () => void;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelection?: () => void;
 }
 
 export function NoteCard({
@@ -29,6 +32,9 @@ export function NoteCard({
   onArchive,
   onExport,
   onDelete,
+  selectionMode = false,
+  isSelected = false,
+  onToggleSelection,
 }: NoteCardProps) {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
@@ -41,9 +47,24 @@ export function NoteCard({
       style={[
         styles.container,
         { backgroundColor: colors.background, borderColor: colors.border },
+        isSelected && { borderColor: colors.tint, borderWidth: 2 },
       ]}
-      onPress={onPress}
+      onPress={selectionMode && onToggleSelection ? onToggleSelection : onPress}
       activeOpacity={0.7}>
+      {selectionMode && (
+        <View style={styles.checkboxContainer}>
+          <View
+            style={[
+              styles.checkbox,
+              { borderColor: colors.border },
+              isSelected && { backgroundColor: colors.tint, borderColor: colors.tint },
+            ]}>
+            {isSelected && (
+              <IconSymbol name="checkmark" size={16} color="#FFFFFF" />
+            )}
+          </View>
+        </View>
+      )}
       <View style={styles.header}>
         <View style={styles.titleRow}>
           {note.isLocked && (
@@ -55,40 +76,42 @@ export function NoteCard({
             {note.title || 'Untitled Note'}
           </Text>
         </View>
-        <View style={styles.actions}>
-          {onLock && (
-            <TouchableOpacity onPress={onLock} style={styles.actionButton}>
-              <IconSymbol
-                name={note.isLocked ? 'lock.fill' : 'lock.open'}
-                size={18}
-                color={colors.icon}
-              />
-            </TouchableOpacity>
-          )}
-          {onArchive && (
-            <TouchableOpacity onPress={onArchive} style={styles.actionButton}>
-              <IconSymbol
-                name={note.isArchived ? 'tray.and.arrow.up' : 'archivebox'}
-                size={18}
-                color={colors.icon}
-              />
-            </TouchableOpacity>
-          )}
-          {onExport && (
-            <TouchableOpacity onPress={onExport} style={styles.actionButton}>
-              <IconSymbol
-                name="square.and.arrow.up"
-                size={18}
-                color={colors.icon}
-              />
-            </TouchableOpacity>
-          )}
-          {onDelete && (
-            <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
-              <IconSymbol name="trash" size={18} color={colors.icon} />
-            </TouchableOpacity>
-          )}
-        </View>
+        {!selectionMode && (
+          <View style={styles.actions}>
+            {onLock && (
+              <TouchableOpacity onPress={onLock} style={styles.actionButton}>
+                <IconSymbol
+                  name={note.isLocked ? 'lock.fill' : 'lock.open'}
+                  size={18}
+                  color={colors.icon}
+                />
+              </TouchableOpacity>
+            )}
+            {onArchive && (
+              <TouchableOpacity onPress={onArchive} style={styles.actionButton}>
+                <IconSymbol
+                  name={note.isArchived ? 'tray.and.arrow.up' : 'archivebox'}
+                  size={18}
+                  color={colors.icon}
+                />
+              </TouchableOpacity>
+            )}
+            {onExport && (
+              <TouchableOpacity onPress={onExport} style={styles.actionButton}>
+                <IconSymbol
+                  name="square.and.arrow.up"
+                  size={18}
+                  color={colors.icon}
+                />
+              </TouchableOpacity>
+            )}
+            {onDelete && (
+              <TouchableOpacity onPress={onDelete} style={styles.actionButton}>
+                <IconSymbol name="trash" size={18} color={colors.icon} />
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </View>
 
       <Text style={[styles.preview, { color: colors.textSecondary }]} numberOfLines={3}>
@@ -139,6 +162,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
+  },
+  checkboxContainer: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 10,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',

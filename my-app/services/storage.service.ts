@@ -282,6 +282,43 @@ export class StorageService {
   }
 
   /**
+   * Export a note as a plain text file
+   */
+  static async exportNoteAsText(note: Note): Promise<void> {
+    try {
+      // Create text content
+      let textContent = `${note.title}\n`;
+      textContent += '='.repeat(note.title.length) + '\n\n';
+      
+      if (note.tags.length > 0) {
+        textContent += 'Tags: ' + note.tags.map(tag => tag.name).join(', ') + '\n\n';
+      }
+      
+      textContent += note.content + '\n\n';
+      textContent += '---\n';
+      textContent += `Created: ${new Date(note.createdAt).toLocaleString()}\n`;
+      textContent += `Updated: ${new Date(note.updatedAt).toLocaleString()}\n`;
+
+      const fileName = `${note.title.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.txt`;
+      const file = new File(Paths.cache, fileName);
+
+      await file.write(textContent);
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(file.uri, {
+          mimeType: 'text/plain',
+          dialogTitle: 'Export Note as Text',
+          UTI: 'public.plain-text',
+        });
+      }
+    } catch (error) {
+      console.error('Failed to export note as text:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Import an encrypted note file
    */
   static async importNote(password: string): Promise<Note | null> {
